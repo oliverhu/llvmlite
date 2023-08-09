@@ -6,6 +6,7 @@ Build script for the shared library providing the C ABI bridge to LLVM.
 from __future__ import print_function
 
 from ctypes.util import find_library
+from glob import glob
 import re
 import multiprocessing
 import os
@@ -72,6 +73,7 @@ def find_windows_generator():
         )
 
     generators.extend([
+        ('Visual Studio 17 2022', ('x64' if is_64bit else 'Win32'), 'v142'),
         # use VS2019 to match how llvmdev is built
         ('Visual Studio 16 2019', ('x64' if is_64bit else 'Win32'), 'v142'),
         # # This is the generator configuration for VS2017
@@ -100,8 +102,15 @@ def main_windows():
     # Run configuration step
     try_cmake(here_dir, build_dir, *generator)
     subprocess.check_call(['cmake', '--build', build_dir, '--config', config])
-    shutil.copy(os.path.join(build_dir, config, 'llvmlite.dll'), target_dir)
+    try:
+        shutil.copy(os.path.join(build_dir, config, 'llvmlite.dll'), target_dir)
+    except shutil.SameFileError:
+        pass
 
+    try:
+        shutil.copy(os.path.join(build_dir, 'clang_rt.builtins.lib'), target_dir)
+    except shutil.SameFileError:
+        pass
 
 def main_posix_cmake(kind, library_ext):
     generator = 'Unix Makefiles'
@@ -178,6 +187,13 @@ def main_posix(kind, library_ext):
     # Normalize whitespace (trim newlines)
     os.environ['LLVM_LIBS'] = ' '.join(libs.split())
 
+    # Get LLVM information for building
+    llvm_libdir = run_llvm_config(llvm_config, ["--libdir"]).strip()
+    os.environ['LLVM_LIBDIR'] = llvm_libdir
+
+    exclude_file = glob(llvm_libdir + '/*LLVM*.a')
+    os.environ['LLVM_EXCLUDE_LIB'] = (',').join(exclude_file)
+
     cxxflags = run_llvm_config(llvm_config, ["--cxxflags"])
     # on OSX cxxflags has null bytes at the end of the string, remove them
     cxxflags = cxxflags.replace('\0', '')
@@ -208,6 +224,7 @@ def main_posix(kind, library_ext):
     makeopts = os.environ.get('LLVMLITE_MAKEOPTS', default_makeopts).split()
     subprocess.check_call(['make', '-f', makefile] + makeopts)
     shutil.copy('libllvmlite' + library_ext, target_dir)
+    shutil.copy('libclang_rt.builtins.a', target_dir)
 
 
 def main():
