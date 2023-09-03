@@ -2121,11 +2121,10 @@ class TestDylib(BaseTest):
 
 
 class TestArchive(BaseTest):
-    @unittest.skipUnless(platform.system() in ["Linux"],
+    @unittest.skipUnless(platform.system() in ["Linux", "Darwin"],
                          "test only works on Linux")
     def test_compiler_rt(self):
         ffi.lib._lib_handle['__ashldi3']()
-
 
 class TestAnalysis(BaseTest):
     def build_ir_module(self):

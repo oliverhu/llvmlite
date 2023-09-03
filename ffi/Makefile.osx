@@ -1,8 +1,9 @@
 
 CXX = clang++
 CXXFLAGS = $(LLVM_CXXFLAGS)
-# Only export the LLVMPY symbols we require and exclude everything else.
-EXPORT = "-Wl,-exported_symbol,_LLVMPY_*"
+# Exclude symbols from LLVM libs. `-unexported_symbol` flag doesn't support negate regex,
+# here we mimic excluding `LLVM(?!PY_).*`
+EXPORT =  -Wl,-unexported_symbol,_LLVM[A-Z][a-z]* -Wl,-unexported_symbol,*llvm* -Wl,-unexported_symbol,_LLVM[A-Z][A-Z][A-Z]* -Wl,-unexported_symbol,_LLVM[A-Z][A-Z][a-z]*
 LDFLAGS :=  $(LDFLAGS) $(EXPORT) $(LLVM_LDFLAGS)
 LIBS = $(LLVM_LIBS)
 INCLUDE = core.h
@@ -12,8 +13,10 @@ SRC = assembly.cpp bitcode.cpp core.cpp initfini.cpp module.cpp value.cpp \
 OUTPUT = libllvmlite.dylib
 MACOSX_DEPLOYMENT_TARGET ?= 10.9
 
+BUILTINS_ARCHIVE = $(LLVM_LIBDIR)/clang/*/lib/darwin/libclang_rt.osx.a
+
 all: $(SRC) $(INCLUDE)
-	MACOSX_DEPLOYMENT_TARGET=$(MACOSX_DEPLOYMENT_TARGET) $(CXX) -dynamiclib $(CXXFLAGS) $(SRC) -o $(OUTPUT) $(LDFLAGS) $(LIBS)
+	MACOSX_DEPLOYMENT_TARGET=$(MACOSX_DEPLOYMENT_TARGET) $(CXX) -dynamiclib $(CXXFLAGS) $(SRC) -o $(OUTPUT) $(LDFLAGS) $(LIBS) -Wl,-force_load ${BUILTINS_ARCHIVE}
 
 clean:
 	rm -rf test
